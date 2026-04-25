@@ -1,10 +1,10 @@
+import { it, expect } from "bun:test";
 import * as fs from "fs";
 import * as path from "path";
-import { createSvg, DrawOptions as DrawOptions } from "..";
+import { createSvg, DrawOptions } from "..";
 import * as grids from "@snk/types/__fixtures__/grid";
 import { snake3 as snake } from "@snk/types/__fixtures__/snake";
 import { getBestRoute } from "@snk/solver/getBestRoute";
-import { AnimationOptions } from "@snk/gif-creator";
 
 const drawOptions: DrawOptions = {
   sizeDotBorderRadius: 2,
@@ -20,7 +20,7 @@ const drawOptions: DrawOptions = {
   },
 };
 
-const animationOptions: AnimationOptions = { frameDuration: 100, step: 1 };
+const animationOptions = { stepDurationMs: 100 };
 
 const dir = path.resolve(__dirname, "__snapshots__");
 
@@ -37,7 +37,7 @@ for (const [key, grid] of Object.entries(grids))
       null,
       chain,
       drawOptions,
-      animationOptions
+      animationOptions,
     );
 
     expect(svg).toBeDefined();

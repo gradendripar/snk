@@ -9,6 +9,7 @@ export type Options = {
   colorEmpty: string;
   colorDotBorder: string;
   colorSnake: string;
+  colorBackground?: string;
   sizeCell: number;
   sizeDot: number;
   sizeDotBorderRadius: number;
@@ -19,7 +20,7 @@ export const drawStack = (
   stack: Color[],
   max: number,
   width: number,
-  o: { colorDots: Record<Color, string> }
+  o: { colorDots: Record<Color, string> },
 ) => {
   ctx.save();
 
@@ -39,9 +40,14 @@ export const drawWorld = (
   cells: Point[] | null,
   snake: Snake,
   stack: Color[],
-  o: Options
+  o: Options,
 ) => {
   ctx.save();
+
+  if (o.colorBackground) {
+    ctx.fillStyle = o.colorBackground;
+    ctx.fillRect(0, 0, 99999, 99999);
+  }
 
   ctx.translate(1 * o.sizeCell, 2 * o.sizeCell);
   drawGrid(ctx, grid, cells, o);
@@ -73,9 +79,14 @@ export const drawLerpWorld = (
   snake1: Snake,
   stack: Color[],
   k: number,
-  o: Options
+  o: Options,
 ) => {
   ctx.save();
+
+  if (o.colorBackground) {
+    ctx.fillStyle = o.colorBackground;
+    ctx.fillRect(0, 0, 99999, 99999);
+  }
 
   ctx.translate(1 * o.sizeCell, 2 * o.sizeCell);
   drawGrid(ctx, grid, cells, o);

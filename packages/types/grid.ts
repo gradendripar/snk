@@ -7,6 +7,12 @@ export type Grid = {
   data: Uint8Array;
 };
 
+export const isGrid = (x: any): x is Grid =>
+  !!x &&
+  typeof x?.width === "number" &&
+  typeof x?.height === "number" &&
+  x.data?.length <= x.width * x.height;
+
 export const isInside = (grid: Grid, x: number, y: number) =>
   x >= 0 && y >= 0 && x < grid.width && y < grid.height;
 
@@ -30,7 +36,7 @@ export const setColor = (
   grid: Grid,
   x: number,
   y: number,
-  color: Color | Empty
+  color: Color | Empty,
 ) => {
   grid.data[getIndex(grid, x, y)] = color || 0;
 };

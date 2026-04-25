@@ -16,7 +16,7 @@
  */
 export const getGithubUserContribution = async (
   userName: string,
-  o: { githubToken: string }
+  o: { githubToken: string; baseUrl?: string },
 ) => {
   const query = /* GraphQL */ `
     query ($login: String!) {
@@ -38,16 +38,21 @@ export const getGithubUserContribution = async (
   `;
   const variables = { login: userName };
 
-  const res = await fetch("https://api.github.com/graphql", {
+  const apiUrl = o.baseUrl
+    ? `${o.baseUrl}/api/graphql`
+    : "https://api.github.com/graphql";
+
+  const res = await fetch(apiUrl, {
     headers: {
       Authorization: `bearer ${o.githubToken}`,
       "Content-Type": "application/json",
+      "User-Agent": "me@platane.me",
     },
     method: "POST",
     body: JSON.stringify({ variables, query }),
   });
 
-  if (!res.ok) throw new Error(res.statusText);
+  if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
 
   const { data, errors } = (await res.json()) as {
     data: GraphQLRes;
@@ -69,7 +74,7 @@ export const getGithubUserContribution = async (
           (d.contributionLevel === "SECOND_QUARTILE" && 2) ||
           (d.contributionLevel === "FIRST_QUARTILE" && 1) ||
           0,
-      }))
+      })),
   );
 };
 

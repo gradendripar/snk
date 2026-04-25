@@ -1,56 +1,59 @@
-import fs from "fs";
-import path from "path";
-import { execFileSync } from "child_process";
-import { createCanvas } from "canvas";
-import { Grid, copyGrid, Color } from "@snk/types/grid";
-import { Snake } from "@snk/types/snake";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
-  Options as DrawOptions,
+  type Options as DrawOptions,
   drawLerpWorld,
   getCanvasWorldSize,
 } from "@snk/draw/drawWorld";
-import type { Point } from "@snk/types/point";
 import { step } from "@snk/solver/step";
-import tmp from "tmp";
-import gifsicle from "gifsicle";
-// @ts-ignore
-import GIFEncoder from "gif-encoder-2";
+import { Color, copyGrid, Grid } from "@snk/types/grid";
+import type { Point } from "@snk/types/point";
+import { Snake } from "@snk/types/snake";
 
-const withTmpDir = async <T>(
-  handler: (dir: string) => Promise<T>
-): Promise<T> => {
-  const { name: dir, removeCallback: cleanUp } = tmp.dirSync({
-    unsafeCleanup: true,
-  });
+export type { Options as DrawOptions } from "@snk/draw/drawWorld";
 
-  try {
-    return await handler(dir);
-  } finally {
-    cleanUp();
-  }
-};
-
-export type AnimationOptions = { frameDuration: number; step: number };
+export type AnimationOptions = { stepDurationMs: number; frameByStep: number };
 
 export const createGif = async (
   grid0: Grid,
   cells: Point[] | null,
   chain: Snake[],
   drawOptions: DrawOptions,
-  animationOptions: AnimationOptions
+  animationOptions: AnimationOptions,
 ) =>
   withTmpDir(async (dir) => {
+    // import dependencies that are optionnals for svg
+    //
+    const { createCanvas } = await import("canvas");
+    const { default: gifsicle } = await import("gifsicle");
+    // @ts-ignore
+    const { default: GIFEncoder } = await import("gif-encoder-2");
+
     const { width, height } = getCanvasWorldSize(grid0, drawOptions);
 
     const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext("2d") as any as CanvasRenderingContext2D;
+    const ctx = canvas.getContext("2d", {
+      alpha: true,
+    }) as any as CanvasRenderingContext2D;
 
     const grid = copyGrid(grid0);
     const stack: Color[] = [];
 
-    const encoder = new GIFEncoder(width, height, "neuquant", true);
+    const encoder = new GIFEncoder(
+      width,
+      height,
+      "neuquant",
+      true,
+      chain.length * animationOptions.frameByStep,
+    );
     encoder.setRepeat(0);
-    encoder.setDelay(animationOptions.frameDuration);
+    encoder.setDelay(
+      animationOptions.stepDurationMs / animationOptions.frameByStep,
+    );
+    // transparency does not look good, let's not
+    // encoder.setTransparent("0x000000");
     encoder.start();
 
     for (let i = 0; i < chain.length; i += 1) {
@@ -58,10 +61,8 @@ export const createGif = async (
       const snake1 = chain[Math.min(chain.length - 1, i + 1)];
       step(grid, stack, snake0);
 
-      for (let k = 0; k < animationOptions.step; k++) {
+      for (let k = 0; k < animationOptions.frameByStep; k++) {
         ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, width, height);
         drawLerpWorld(
           ctx,
           grid,
@@ -69,8 +70,8 @@ export const createGif = async (
           snake0,
           snake1,
           stack,
-          k / animationOptions.step,
-          drawOptions
+          k / animationOptions.frameByStep,
+          drawOptions,
         );
 
         encoder.addFrame(ctx);
@@ -79,6 +80,38 @@ export const createGif = async (
 
     const outFileName = path.join(dir, "out.gif");
     const optimizedFileName = path.join(dir, "out.optimized.gif");
+
+    // generate palette file
+    const paletteFileName = path.join(dir, "palette.txt");
+    {
+      const colors = [
+        drawOptions.colorBackground,
+        drawOptions.colorEmpty,
+        drawOptions.colorSnake,
+        drawOptions.colorDotBorder,
+        ...Object.values(drawOptions.colorDots),
+      ].filter(Boolean) as string[];
+
+      const canvas = createCanvas(colors.length, 1);
+      const ctx = canvas.getContext("2d") as any as CanvasRenderingContext2D;
+      for (let i = colors.length; i--; ) {
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(i, 0, 1, 1);
+      }
+
+      const imgData = ctx.getImageData(0, 0, colors.length, 1);
+
+      fs.writeFileSync(
+        paletteFileName,
+        Array.from({ length: colors.length }, (_, i) =>
+          [
+            imgData.data[i * 4 + 0],
+            imgData.data[i * 4 + 1],
+            imgData.data[i * 4 + 2],
+          ].join(" "),
+        ).join("\n"),
+      );
+    }
 
     encoder.finish();
     fs.writeFileSync(outFileName, encoder.out.getData());
@@ -89,11 +122,26 @@ export const createGif = async (
         //
         "--optimize=3",
         "--color-method=diversity",
-        "--colors=18",
+        `--use-colormap=${paletteFileName}`,
+        // "--colors=16",
         outFileName,
         ["--output", optimizedFileName],
-      ].flat()
+      ].flat(),
     );
 
-    return fs.readFileSync(optimizedFileName);
+    return new Uint8Array(fs.readFileSync(optimizedFileName));
   });
+
+export const withTmpDir = async <T>(
+  handler: (dir: string) => Promise<T>,
+): Promise<T> => {
+  const dir = path.join(tmpdir(), Math.random().toString(16).slice(2));
+
+  fs.mkdirSync(dir, { recursive: true });
+
+  try {
+    return await handler(dir);
+  } finally {
+    fs.rmdirSync(dir, { recursive: true });
+  }
+};

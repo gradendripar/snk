@@ -1,26 +1,31 @@
-import * as fs from "fs";
-import * as path from "path";
-import * as core from "@actions/core";
-import { parseOutputsOption } from "./outputsOptions";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { generateSnakeAnimation } from "generate-snake-animation/generateSnakeAnimation";
+import { parseOutputsOption } from "generate-snake-animation/outputsOptions";
+import * as githubAction from "./github-action";
 
 (async () => {
   try {
-    const userName = core.getInput("github_user_name");
-    const outputs = parseOutputsOption(
-      core.getMultilineInput("outputs") ?? [
-        core.getInput("gif_out_path"),
-        core.getInput("svg_out_path"),
-      ]
-    );
+    const userName = githubAction.getInput("github_user_name");
     const githubToken =
-      process.env.GITHUB_TOKEN ?? core.getInput("github_token");
+      process.env.GITHUB_TOKEN ?? githubAction.getInput("github_token");
 
-    const { generateContributionSnake } = await import(
-      "./generateContributionSnake"
+    const outputsRaw = [
+      ...githubAction.getInput("outputs").split("\n"),
+      //
+      // legacy
+      githubAction.getInput("gif_out_path"),
+      githubAction.getInput("svg_out_path"),
+    ]
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    const outputs = parseOutputsOption(outputsRaw);
+
+    const results = await generateSnakeAnimation(
+      { platform: "github", username: userName, githubToken },
+      outputs,
     );
-    const results = await generateContributionSnake(userName, outputs, {
-      githubToken,
-    });
 
     outputs.forEach((out, i) => {
       const result = results[i];
@@ -31,6 +36,6 @@ import { parseOutputsOption } from "./outputsOptions";
       }
     });
   } catch (e: any) {
-    core.setFailed(`Action failed with "${e.message}"`);
+    githubAction.setFailed(`Action failed with "${e.message}"`);
   }
 })();
